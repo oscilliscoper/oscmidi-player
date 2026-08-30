@@ -13,15 +13,37 @@ let song = null;
 
 
 // ============================================================
-// FILE LOADING
+// INSTRUMENT NAMES
+// ============================================================
+
+const instrumentNames = [
+    "Square",
+    "Triangle",
+    "Sampled",
+    "DPCM",
+    "Sawtooth",
+    "Sine",
+    "XM",
+    "AM",
+    "FM",
+    "Noise / PCM drums"
+];
+
+
+// ============================================================
+// FILE INPUT
 // ============================================================
 
 fileInput.addEventListener("change", async () => {
+
     const file = fileInput.files[0];
 
-    if (!file) return;
+    if (!file) {
+        return;
+    }
 
     try {
+
         const text = await file.text();
 
         song = parseOSCMID(text);
@@ -33,14 +55,22 @@ fileInput.addEventListener("change", async () => {
 
         displayChannels(song);
 
-        status.textContent = "OSCMID file loaded.";
+        status.textContent =
+            "OSCMID file loaded.";
+
     }
     catch (error) {
+
         song = null;
 
-        fileInfo.textContent = "Failed to load file.";
-        channelsDisplay.textContent = "No channels loaded.";
-        status.textContent = `Error: ${error.message}`;
+        fileInfo.textContent =
+            "Failed to load file.";
+
+        channelsDisplay.textContent =
+            "No channels loaded.";
+
+        status.textContent =
+            `Error: ${error.message}`;
 
         console.error(error);
     }
@@ -48,31 +78,37 @@ fileInput.addEventListener("change", async () => {
 
 
 // ============================================================
-// OSCMID PARSER
+// PARSER
 // ============================================================
 
 function parseOSCMID(source) {
 
     source = source.replace(/^\uFEFF/, "");
 
-    const rawLines = source.split(/\r?\n/);
+    const rawLines =
+        source.split(/\r?\n/);
 
-    const lines = rawLines
-        .map(line => {
-            const comment = line.indexOf("++");
+    const lines =
+        rawLines
+            .map(line => {
 
-            if (comment !== -1) {
-                line = line.substring(0, comment);
-            }
+                const comment =
+                    line.indexOf("++");
 
-            return line.trim();
-        })
-        .filter(line => line.length > 0);
+                if (comment !== -1) {
+                    line =
+                        line.substring(0, comment);
+                }
+
+                return line.trim();
+            })
+            .filter(line => line.length > 0);
 
 
-    if (!lines.length) {
+    if (lines.length === 0) {
         throw new Error("Empty OSCMID file.");
     }
+
 
     if (lines[0] !== "OM") {
         throw new Error("Missing OM header.");
@@ -92,6 +128,10 @@ function parseOSCMID(source) {
 
         const line = lines[i];
 
+
+        // ----------------------------------------------------
+        // SECTION MARKERS
+        // ----------------------------------------------------
 
         if (line === "channelsstart") {
             section = "channels";
@@ -146,40 +186,48 @@ function parseOSCMID(source) {
 
         if (section === "channels") {
 
-            const match =
-                line.match(/^(\d+)\s*=\s*(-?\d+)$/);
+            const channelMatch =
+                line.match(
+                    /^(\d+)\s*=\s*(-?\d+)$/
+                );
 
-            if (match) {
+
+            if (channelMatch) {
 
                 const channel =
-                    Number(match[1]);
+                    Number(channelMatch[1]);
 
                 const instrument =
-                    Number(match[2]);
+                    Number(channelMatch[2]);
+
 
                 channels[channel] = {
                     instrument,
                     properties: {}
                 };
 
-                currentChannel = channel;
+
+                currentChannel =
+                    channel;
 
                 continue;
             }
 
 
-            const property =
+            const propertyMatch =
                 line.match(
                     /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"([^"]*)"$/
                 );
 
-            if (property && currentChannel !== null) {
+
+            if (
+                propertyMatch &&
+                currentChannel !== null
+            ) {
 
                 channels[currentChannel]
-                    .properties[property[1]] =
-                    parseValue(property[2]);
-
-                continue;
+                    .properties[propertyMatch[1]] =
+                    parseValue(propertyMatch[2]);
             }
 
             continue;
@@ -192,15 +240,21 @@ function parseOSCMID(source) {
 
         if (section === "notes") {
 
-            const match =
+            const noteMatch =
                 line.match(
                     /^([A-Za-z_][A-Za-z0-9_]*|\d+)\s*:(.*)$/
                 );
 
-            if (!match) continue;
 
-            notes[match[1]] =
-                parseNoteSequence(match[2]);
+            if (!noteMatch) {
+                continue;
+            }
+
+
+            notes[noteMatch[1]] =
+                parseNoteSequence(
+                    noteMatch[2]
+                );
 
             continue;
         }
@@ -212,15 +266,21 @@ function parseOSCMID(source) {
 
         if (section === "metadata") {
 
-            const match =
+            const metadataMatch =
                 line.match(
                     /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"([^"]*)"$/
                 );
 
-            if (!match) continue;
 
-            metadata[match[1]] =
-                parseMetadataValue(match[2]);
+            if (!metadataMatch) {
+                continue;
+            }
+
+
+            metadata[metadataMatch[1]] =
+                parseMetadataValue(
+                    metadataMatch[2]
+                );
 
             continue;
         }
@@ -232,23 +292,53 @@ function parseOSCMID(source) {
 
         if (section === "converter") {
 
-            const match =
-                line.match(/^(\d+)\s*=\s*(\d+)$/);
+            const converterMatch =
+                line.match(
+                    /^(\d+)\s*=\s*(\d+)$/
+                );
 
-            if (!match) continue;
 
-            converter[Number(match[1])] =
-                Number(match[2]);
+            if (!converterMatch) {
+                continue;
+            }
+
+
+            /*
+             * IMPORTANT:
+             *
+             * OSCMID converter:
+             *
+             *     0 = 30
+             *
+             * means:
+             *
+             *     OSCMID channel 0
+             *     uses notes channel 30
+             *
+             * Therefore converter[0] = 30.
+             */
+
+            converter[
+                Number(converterMatch[1])
+            ] =
+                Number(converterMatch[2]);
 
             continue;
         }
     }
 
 
-    const bpm = Number(metadata.BPM);
+    const bpm =
+        Number(metadata.BPM);
 
-    if (!Number.isFinite(bpm) || bpm <= 0) {
-        throw new Error("Invalid or missing BPM.");
+
+    if (
+        !Number.isFinite(bpm) ||
+        bpm <= 0
+    ) {
+        throw new Error(
+            "Invalid or missing BPM."
+        );
     }
 
 
@@ -267,14 +357,23 @@ function parseOSCMID(source) {
 
 function parseValue(value) {
 
-    if (value === "true") return true;
-    if (value === "false") return false;
+    if (value === "true") {
+        return true;
+    }
 
-    const number = Number(value);
+    if (value === "false") {
+        return false;
+    }
+
+
+    const number =
+        Number(value);
+
 
     if (Number.isFinite(number)) {
         return number;
     }
+
 
     return value;
 }
@@ -294,7 +393,8 @@ function parseMetadataValue(value) {
             .filter(Boolean)
             .map(x => {
 
-                const n = Number(x);
+                const n =
+                    Number(x);
 
                 return Number.isFinite(n)
                     ? n
@@ -334,13 +434,19 @@ function parseNoteSequence(text) {
 
 
         const match =
-            text.substring(position)
-                .match(/^-?\d+(?:\.\d+)?/);
+            text
+                .substring(position)
+                .match(
+                    /^-?\d+(?:\.\d+)?/
+                );
 
 
         if (!match) {
+
             throw new Error(
-                `Invalid note near: ${text.substring(position)}`
+                `Invalid note near: ${
+                    text.substring(position)
+                }`
             );
         }
 
@@ -348,7 +454,9 @@ function parseNoteSequence(text) {
         const value =
             Number(match[0]);
 
-        position += match[0].length;
+
+        position +=
+            match[0].length;
 
 
         if (text[position] === ",") {
@@ -356,7 +464,15 @@ function parseNoteSequence(text) {
         }
 
 
+        /*
+         * A note immediately followed by another
+         * note is held.
+         *
+         * A space means the next note is repeated.
+         */
+
         let repeated = false;
+
 
         if (
             position < text.length &&
@@ -383,48 +499,38 @@ function parseNoteSequence(text) {
 
 function displayChannels(song) {
 
-    const channels =
+    const channelNumbers =
         Object.keys(song.channels)
             .map(Number)
             .sort((a, b) => a - b);
 
 
-    if (!channels.length) {
+    if (channelNumbers.length === 0) {
+
         channelsDisplay.textContent =
             "No channels loaded.";
+
         return;
     }
-
-
-    const names = [
-        "Square",
-        "Triangle",
-        "Sampled",
-        "DPCM",
-        "Sawtooth",
-        "Sine",
-        "XM",
-        "AM",
-        "FM",
-        "Noise / PCM drums"
-    ];
 
 
     const output = [];
 
 
-    for (const number of channels) {
+    for (const channelNumber of channelNumbers) {
 
         const channel =
-            song.channels[number];
+            song.channels[channelNumber];
+
 
         const name =
-            names[channel.instrument] ||
+            instrumentNames[channel.instrument] ||
             "Unknown";
 
 
         output.push(
-            `Channel ${number}: ${name} (${channel.instrument})`
+            `Channel ${channelNumber}: ` +
+            `${name} (${channel.instrument})`
         );
 
 
@@ -433,13 +539,13 @@ function displayChannels(song) {
         ) {
 
             output.push(
-                `  ${property}: ${
-                    JSON.stringify(
-                        channel.properties[property]
-                    )
-                }`
+                `  ${property}: ` +
+                JSON.stringify(
+                    channel.properties[property]
+                )
             );
         }
+
 
         output.push("");
     }
@@ -451,63 +557,75 @@ function displayChannels(song) {
 
 
 // ============================================================
-// PLAY
+// PLAY BUTTON
 // ============================================================
 
-playButton.addEventListener("click", async () => {
+playButton.addEventListener(
+    "click",
+    async () => {
 
-    if (!song) {
+        if (!song) {
+
+            status.textContent =
+                "Load an OSCMID file first.";
+
+            return;
+        }
+
+
+        stopPlayback();
+
+
+        if (!audioContext) {
+
+            audioContext =
+                new AudioContext();
+        }
+
+
+        await audioContext.resume();
+
+
+        playbackId++;
+
+
+        const id =
+            playbackId;
+
 
         status.textContent =
-            "Load an OSCMID file first.";
+            `Playing — ${song.metadata.BPM} BPM`;
 
-        return;
+
+        playSong(
+            song,
+            id
+        );
     }
+);
 
 
-    stopPlayback();
+// ============================================================
+// STOP BUTTON
+// ============================================================
+
+stopButton.addEventListener(
+    "click",
+    () => {
+
+        stopPlayback();
 
 
-    if (!audioContext) {
-        audioContext =
-            new AudioContext();
+        status.textContent =
+            song
+                ? "Stopped."
+                : "Waiting for OSCMID file...";
     }
-
-
-    await audioContext.resume();
-
-
-    playbackId++;
-
-    const id =
-        playbackId;
-
-
-    status.textContent =
-        `Playing — ${song.metadata.BPM} BPM`;
-
-
-    playSong(song, id);
-});
+);
 
 
 // ============================================================
-// STOP
-// ============================================================
-
-stopButton.addEventListener("click", () => {
-
-    stopPlayback();
-
-    status.textContent =
-        song
-            ? "Stopped."
-            : "Waiting for OSCMID file...";
-});
-
-
-// ============================================================
-// SONG PLAYER
+// PLAY SONG
 // ============================================================
 
 function playSong(song, id) {
@@ -516,7 +634,12 @@ function playSong(song, id) {
         Number(song.metadata.BPM);
 
 
-    // One OSCMID unit = one sixteenth note.
+    /*
+     * One OSCMID note unit = one quarter-note subdivision.
+     *
+     * The note streams you supplied use 4 units per beat.
+     */
+
     const unitDuration =
         60 / bpm / 4;
 
@@ -529,9 +652,17 @@ function playSong(song, id) {
         0;
 
 
-    for (const streamName in song.notes) {
+    // --------------------------------------------------------
+    // MELODIC CHANNELS
+    // --------------------------------------------------------
 
-        if (streamName === "percussion") {
+    for (
+        const streamName in song.notes
+    ) {
+
+        if (
+            streamName === "percussion"
+        ) {
             continue;
         }
 
@@ -540,15 +671,38 @@ function playSong(song, id) {
             Number(streamName);
 
 
-        const sequence =
-            song.notes[streamName];
+        if (!Number.isFinite(streamID)) {
+            continue;
+        }
 
+
+        /*
+         * THIS IS THE IMPORTANT FIX.
+         *
+         * Converter:
+         *
+         *     0 = 30
+         *     1 = 8
+         *
+         * means:
+         *
+         *     note stream 30 → channel 0
+         *     note stream 8  → channel 1
+         *
+         * So we search for the OSCMID channel whose
+         * converter value equals this note stream.
+         */
 
         const channelNumber =
-            song.converter[streamID];
+            findChannelForNoteStream(
+                song.converter,
+                streamID
+            );
 
 
-        if (channelNumber === undefined) {
+        if (
+            channelNumber === null
+        ) {
             continue;
         }
 
@@ -560,6 +714,10 @@ function playSong(song, id) {
         if (!channel) {
             continue;
         }
+
+
+        const sequence =
+            song.notes[streamName];
 
 
         longest =
@@ -578,6 +736,10 @@ function playSong(song, id) {
         );
     }
 
+
+    // --------------------------------------------------------
+    // PERCUSSION
+    // --------------------------------------------------------
 
     if (song.notes.percussion) {
 
@@ -608,19 +770,55 @@ function playSong(song, id) {
     }
 
 
-    setTimeout(() => {
+    setTimeout(
+        () => {
 
-        if (id === playbackId) {
-            status.textContent =
-                "Finished.";
-        }
+            if (id === playbackId) {
 
-    }, (longest * unitDuration + 0.8) * 1000);
+                status.textContent =
+                    "Finished.";
+            }
+
+        },
+        (
+            longest * unitDuration +
+            0.8
+        ) * 1000
+    );
 }
 
 
 // ============================================================
-// MELODIC PLAYER
+// CONVERTER LOOKUP
+// ============================================================
+
+function findChannelForNoteStream(
+    converter,
+    streamID
+) {
+
+    for (
+        const channelNumber in converter
+    ) {
+
+        if (
+            converter[channelNumber] ===
+            streamID
+        ) {
+
+            return Number(
+                channelNumber
+            );
+        }
+    }
+
+
+    return null;
+}
+
+
+// ============================================================
+// MELODIC SEQUENCE
 // ============================================================
 
 function playMelodicSequence(
@@ -634,29 +832,48 @@ function playMelodicSequence(
     let i = 0;
 
 
-    while (i < sequence.length) {
+    while (
+        i < sequence.length
+    ) {
 
-        if (id !== playbackId) return;
+        if (
+            id !== playbackId
+        ) {
+            return;
+        }
 
 
         const event =
             sequence[i];
 
 
-        if (event.value === 0) {
+        if (
+            event.value === 0
+        ) {
+
             i++;
             continue;
         }
 
 
+        /*
+         * Consecutive identical notes with no space
+         * between them are one held note.
+         */
+
         let length = 1;
 
 
         while (
-            i + length < sequence.length &&
-            sequence[i + length].value === event.value &&
+            i + length <
+            sequence.length &&
+
+            sequence[i + length].value ===
+            event.value &&
+
             !sequence[i + length].repeated
         ) {
+
             length++;
         }
 
@@ -667,7 +884,8 @@ function playMelodicSequence(
 
 
         const duration =
-            length * unitDuration;
+            length *
+            unitDuration;
 
 
         playInstrument(
@@ -694,7 +912,9 @@ function playInstrument(
     duration
 ) {
 
-    switch (channel.instrument) {
+    switch (
+        channel.instrument
+    ) {
 
         case 0:
             playSquare(
@@ -807,8 +1027,11 @@ function playInstrument(
 
 function midiToFrequency(note) {
 
-    // Standard MIDI pitch.
-    // NO +8 correction.
+    /*
+     * Standard MIDI note numbering.
+     *
+     * NO +8 correction.
+     */
 
     return 440 *
         Math.pow(
@@ -856,16 +1079,23 @@ function playOscillator(
 
 
     oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-
-
-    oscillator.start(time);
-    oscillator.stop(
-        time + duration + 0.02
+    gain.connect(
+        audioContext.destination
     );
 
 
-    activeNodes.push(oscillator);
+    oscillator.start(time);
+
+    oscillator.stop(
+        time +
+        duration +
+        0.02
+    );
+
+
+    activeNodes.push(
+        oscillator
+    );
 }
 
 
@@ -898,10 +1128,6 @@ function playSquare(
         );
 
 
-    const frequency =
-        midiToFrequency(midiNote);
-
-
     const oscillator =
         audioContext.createOscillator();
 
@@ -918,7 +1144,7 @@ function playSquare(
 
 
     oscillator.frequency.setValueAtTime(
-        frequency,
+        midiToFrequency(midiNote),
         time
     );
 
@@ -932,16 +1158,23 @@ function playSquare(
 
 
     oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-
-
-    oscillator.start(time);
-    oscillator.stop(
-        time + duration + 0.02
+    gain.connect(
+        audioContext.destination
     );
 
 
-    activeNodes.push(oscillator);
+    oscillator.start(time);
+
+    oscillator.stop(
+        time +
+        duration +
+        0.02
+    );
+
+
+    activeNodes.push(
+        oscillator
+    );
 }
 
 
@@ -949,7 +1182,9 @@ function playSquare(
 // PULSE WAVE
 // ============================================================
 
-function makePulseWave(duty) {
+function makePulseWave(
+    duty
+) {
 
     const real =
         new Float32Array(64);
@@ -958,7 +1193,11 @@ function makePulseWave(duty) {
         new Float32Array(64);
 
 
-    for (let harmonic = 1; harmonic < 64; harmonic++) {
+    for (
+        let harmonic = 1;
+        harmonic < 64;
+        harmonic++
+    ) {
 
         imag[harmonic] =
             Math.sin(
@@ -966,7 +1205,10 @@ function makePulseWave(duty) {
                 harmonic *
                 duty
             ) /
-            (Math.PI * harmonic);
+            (
+                Math.PI *
+                harmonic
+            );
     }
 
 
@@ -988,7 +1230,9 @@ function playNESTriangle(
 ) {
 
     const frequency =
-        midiToFrequency(midiNote);
+        midiToFrequency(
+            midiNote
+        );
 
 
     const sampleRate =
@@ -1017,12 +1261,6 @@ function playNESTriangle(
         buffer.getChannelData(0);
 
 
-    // NES triangle uses a 5-bit counter:
-    // 15 -> 0 -> 15.
-    //
-    // The values are deliberately stepped,
-    // rather than being a smooth mathematical triangle.
-
     const steps = [
         0, 1, 2, 3,
         4, 5, 6, 7,
@@ -1035,7 +1273,11 @@ function playNESTriangle(
     ];
 
 
-    for (let i = 0; i < sampleCount; i++) {
+    for (
+        let i = 0;
+        i < sampleCount;
+        i++
+    ) {
 
         const phase =
             (
@@ -1048,7 +1290,8 @@ function playNESTriangle(
         const step =
             steps[
                 Math.floor(
-                    phase * steps.length
+                    phase *
+                    steps.length
                 )
             ];
 
@@ -1079,16 +1322,23 @@ function playNESTriangle(
 
 
     source.connect(gain);
-    gain.connect(audioContext.destination);
-
-
-    source.start(time);
-    source.stop(
-        time + duration + 0.02
+    gain.connect(
+        audioContext.destination
     );
 
 
-    activeNodes.push(source);
+    source.start(time);
+
+    source.stop(
+        time +
+        duration +
+        0.02
+    );
+
+
+    activeNodes.push(
+        source
+    );
 }
 
 
@@ -1103,14 +1353,16 @@ function playSampled(
 ) {
 
     const frequency =
-        midiToFrequency(midiNote);
+        midiToFrequency(
+            midiNote
+        );
 
 
     const sampleRate =
         audioContext.sampleRate;
 
 
-    const sampleLength =
+    const actualDuration =
         Math.min(
             duration,
             0.25
@@ -1122,7 +1374,7 @@ function playSampled(
             1,
             Math.floor(
                 sampleRate *
-                sampleLength
+                actualDuration
             )
         );
 
@@ -1139,16 +1391,24 @@ function playSampled(
         buffer.getChannelData(0);
 
 
-    // Deliberately lo-fi sampled tone.
+    const sampleRateDivider =
+        16;
 
-    const sampleRateDivider = 16;
 
     let heldSample = 0;
 
 
-    for (let i = 0; i < length; i++) {
+    for (
+        let i = 0;
+        i < length;
+        i++
+    ) {
 
-        if (i % sampleRateDivider === 0) {
+        if (
+            i %
+            sampleRateDivider ===
+            0
+        ) {
 
             const phase =
                 (
@@ -1169,7 +1429,8 @@ function playSampled(
 
         const decay =
             Math.pow(
-                1 - i / length,
+                1 -
+                i / length,
                 0.7
             );
 
@@ -1195,22 +1456,29 @@ function playSampled(
     envelope(
         gain,
         time,
-        sampleLength,
+        actualDuration,
         0.15
     );
 
 
     source.connect(gain);
-    gain.connect(audioContext.destination);
-
-
-    source.start(time);
-    source.stop(
-        time + sampleLength + 0.02
+    gain.connect(
+        audioContext.destination
     );
 
 
-    activeNodes.push(source);
+    source.start(time);
+
+    source.stop(
+        time +
+        actualDuration +
+        0.02
+    );
+
+
+    activeNodes.push(
+        source
+    );
 }
 
 
@@ -1225,7 +1493,9 @@ function playDPCM(
 ) {
 
     const frequency =
-        midiToFrequency(midiNote);
+        midiToFrequency(
+            midiNote
+        );
 
 
     const sampleRate =
@@ -1274,20 +1544,26 @@ function playDPCM(
     let nextStep = 0;
 
 
-    for (let i = 0; i < length; i++) {
+    for (
+        let i = 0;
+        i < length;
+        i++
+    ) {
 
-        if (i >= nextStep) {
+        if (
+            i >= nextStep
+        ) {
 
             accumulator =
                 accumulator >= 0
                     ? -1
                     : 1;
 
-            nextStep += period;
+            nextStep +=
+                period;
         }
 
 
-        // Quantized 1-bit-ish DPCM sound.
         data[i] =
             accumulator *
             0.12;
@@ -1315,16 +1591,23 @@ function playDPCM(
 
 
     source.connect(gain);
-    gain.connect(audioContext.destination);
-
-
-    source.start(time);
-    source.stop(
-        time + actualDuration + 0.02
+    gain.connect(
+        audioContext.destination
     );
 
 
-    activeNodes.push(source);
+    source.start(time);
+
+    source.stop(
+        time +
+        actualDuration +
+        0.02
+    );
+
+
+    activeNodes.push(
+        source
+    );
 }
 
 
@@ -1337,10 +1620,6 @@ function playXM(
     time,
     duration
 ) {
-
-    // XM-style radio modulation:
-    // a carrier whose frequency is slowly shifted
-    // by another oscillator.
 
     const carrier =
         audioContext.createOscillator();
@@ -1359,7 +1638,9 @@ function playXM(
 
 
     const frequency =
-        midiToFrequency(midiNote);
+        midiToFrequency(
+            midiNote
+        );
 
 
     carrier.type =
@@ -1412,16 +1693,21 @@ function playXM(
     );
 
 
-    modulator.start(time);
     carrier.start(time);
+    modulator.start(time);
+
+
+    carrier.stop(
+        time +
+        duration +
+        0.02
+    );
 
 
     modulator.stop(
-        time + duration + 0.02
-    );
-
-    carrier.stop(
-        time + duration + 0.02
+        time +
+        duration +
+        0.02
     );
 
 
@@ -1479,7 +1765,7 @@ function playAM(
 
 
     modGain.gain.setValueAtTime(
-        0.12,
+        0.08,
         time
     );
 
@@ -1519,11 +1805,16 @@ function playAM(
 
 
     carrier.stop(
-        time + duration + 0.02
+        time +
+        duration +
+        0.02
     );
 
+
     modulator.stop(
-        time + duration + 0.02
+        time +
+        duration +
+        0.02
     );
 
 
@@ -1561,7 +1852,9 @@ function playFM(
 
 
     const frequency =
-        midiToFrequency(midiNote);
+        midiToFrequency(
+            midiNote
+        );
 
 
     carrier.type =
@@ -1619,11 +1912,16 @@ function playFM(
 
 
     carrier.stop(
-        time + duration + 0.02
+        time +
+        duration +
+        0.02
     );
 
+
     modulator.stop(
-        time + duration + 0.02
+        time +
+        duration +
+        0.02
     );
 
 
@@ -1635,7 +1933,7 @@ function playFM(
 
 
 // ============================================================
-// NOISE / DRUMS
+// NOISE / PCM
 // ============================================================
 
 function playNoise(
@@ -1645,11 +1943,9 @@ function playNoise(
     properties
 ) {
 
-    const pcm =
-        properties.PCMdrums === true;
-
-
-    if (pcm) {
+    if (
+        properties.PCMdrums === true
+    ) {
 
         playPCMDrum(
             midiNote,
@@ -1705,18 +2001,24 @@ function playNoiseDrum(
         buffer.getChannelData(0);
 
 
-    for (let i = 0; i < length; i++) {
+    for (
+        let i = 0;
+        i < length;
+        i++
+    ) {
 
         const decay =
             Math.pow(
-                1 - i / length,
+                1 -
+                i / length,
                 3
             );
 
 
         data[i] =
             (
-                Math.random() * 2 - 1
+                Math.random() *
+                2 - 1
             ) *
             decay;
     }
@@ -1758,7 +2060,8 @@ function playNoiseDrum(
 
     gain.gain.exponentialRampToValueAtTime(
         0.0001,
-        time + actualDuration
+        time +
+        actualDuration
     );
 
 
@@ -1770,12 +2073,16 @@ function playNoiseDrum(
 
 
     source.start(time);
+
     source.stop(
-        time + actualDuration
+        time +
+        actualDuration
     );
 
 
-    activeNodes.push(source);
+    activeNodes.push(
+        source
+    );
 }
 
 
@@ -1789,11 +2096,10 @@ function playPCMDrum(
     duration
 ) {
 
-    // Low-quality sample-style percussion.
-    // Different MIDI drum notes get different sounds.
-
     const actualDuration =
-        getDrumDuration(midiNote);
+        getDrumDuration(
+            midiNote
+        );
 
 
     const sampleRate =
@@ -1819,7 +2125,11 @@ function playPCMDrum(
         buffer.getChannelData(0);
 
 
-    for (let i = 0; i < length; i++) {
+    for (
+        let i = 0;
+        i < length;
+        i++
+    ) {
 
         const t =
             i / sampleRate;
@@ -1834,12 +2144,15 @@ function playPCMDrum(
         let sample;
 
 
-        // Kick
-        if (midiNote === 36) {
+        if (
+            midiNote === 36
+        ) {
 
-            const f =
+            const frequency =
                 140 *
-                Math.exp(-t * 15) +
+                Math.exp(
+                    -t * 15
+                ) +
                 45;
 
 
@@ -1847,58 +2160,67 @@ function playPCMDrum(
                 Math.sin(
                     2 *
                     Math.PI *
-                    f *
+                    frequency *
                     t
                 ) *
                 decay;
         }
 
-
-        // Snare
-        else if (midiNote === 38) {
-
-            sample =
-                (
-                    Math.random() * 2 - 1
-                ) *
-                Math.exp(-t * 35);
-        }
-
-
-        // Closed hi-hat
-        else if (midiNote === 42) {
+        else if (
+            midiNote === 38
+        ) {
 
             sample =
                 (
-                    Math.random() * 2 - 1
+                    Math.random() *
+                    2 - 1
                 ) *
-                Math.exp(-t * 70);
+                Math.exp(
+                    -t * 35
+                );
         }
 
-
-        // Open hi-hat
-        else if (midiNote === 46) {
+        else if (
+            midiNote === 42
+        ) {
 
             sample =
                 (
-                    Math.random() * 2 - 1
+                    Math.random() *
+                    2 - 1
                 ) *
-                Math.exp(-t * 12);
+                Math.exp(
+                    -t * 70
+                );
         }
 
+        else if (
+            midiNote === 46
+        ) {
 
-        // Everything else
+            sample =
+                (
+                    Math.random() *
+                    2 - 1
+                ) *
+                Math.exp(
+                    -t * 12
+                );
+        }
+
         else {
 
             sample =
                 (
-                    Math.random() * 2 - 1
+                    Math.random() *
+                    2 - 1
                 ) *
-                Math.exp(-t * 25);
+                Math.exp(
+                    -t * 25
+                );
         }
 
 
-        // Low-quality 8-bit-ish quantization.
         data[i] =
             Math.round(
                 sample * 32
@@ -1929,12 +2251,16 @@ function playPCMDrum(
 
 
     source.start(time);
+
     source.stop(
-        time + actualDuration
+        time +
+        actualDuration
     );
 
 
-    activeNodes.push(source);
+    activeNodes.push(
+        source
+    );
 }
 
 
@@ -1942,22 +2268,39 @@ function playPCMDrum(
 // DRUM DURATIONS
 // ============================================================
 
-function getDrumDuration(note) {
+function getDrumDuration(
+    note
+) {
 
-    if (note === 36) return 0.35;
-    if (note === 38) return 0.20;
-    if (note === 42) return 0.08;
-    if (note === 46) return 0.35;
+    if (note === 36) {
+        return 0.35;
+    }
 
-    // MIDI 58 = Vibraslap.
-    if (note === 58) return 0.5;
+    if (note === 38) {
+        return 0.20;
+    }
+
+    if (note === 42) {
+        return 0.08;
+    }
+
+    if (note === 46) {
+        return 0.35;
+    }
+
+
+    // Vibraslap
+    if (note === 58) {
+        return 0.5;
+    }
+
 
     return 0.15;
 }
 
 
 // ============================================================
-// PERCUSSION SEQUENCE
+// PERCUSSION
 // ============================================================
 
 function playPercussionSequence(
@@ -1974,14 +2317,20 @@ function playPercussionSequence(
         i++
     ) {
 
-        if (id !== playbackId) return;
+        if (
+            id !== playbackId
+        ) {
+            return;
+        }
 
 
         const event =
             sequence[i];
 
 
-        if (event.value === 0) {
+        if (
+            event.value === 0
+        ) {
             continue;
         }
 
@@ -1991,10 +2340,10 @@ function playPercussionSequence(
             i * unitDuration;
 
 
-        // Vibraslap is special:
-        // about half a second and its own release.
-
-        if (event.value === 58) {
+        // Vibraslap is MIDI 58.
+        if (
+            event.value === 58
+        ) {
 
             playVibraslap(
                 time,
@@ -2061,7 +2410,11 @@ function playVibraslap(
         buffer.getChannelData(0);
 
 
-    for (let i = 0; i < length; i++) {
+    for (
+        let i = 0;
+        i < length;
+        i++
+    ) {
 
         const t =
             i / sampleRate;
@@ -2073,14 +2426,11 @@ function playVibraslap(
             );
 
 
-        const click =
-            (
-                Math.random() * 2 - 1
-            );
-
-
         data[i] =
-            click *
+            (
+                Math.random() *
+                2 - 1
+            ) *
             decay;
     }
 
@@ -2135,13 +2485,16 @@ function playVibraslap(
 
     gain.gain.setValueAtTime(
         0.25,
-        time + duration - release
+        time +
+        duration -
+        release
     );
 
 
     gain.gain.exponentialRampToValueAtTime(
         0.0001,
-        time + duration
+        time +
+        duration
     );
 
 
@@ -2153,12 +2506,16 @@ function playVibraslap(
 
 
     source.start(time);
+
     source.stop(
-        time + duration
+        time +
+        duration
     );
 
 
-    activeNodes.push(source);
+    activeNodes.push(
+        source
+    );
 }
 
 
@@ -2190,7 +2547,9 @@ function envelope(
     const releaseStart =
         Math.max(
             time + attack,
-            time + duration - release
+            time +
+            duration -
+            release
         );
 
 
@@ -2214,13 +2573,14 @@ function envelope(
 
     gain.gain.exponentialRampToValueAtTime(
         0.0001,
-        time + duration
+        time +
+        duration
     );
 }
 
 
 // ============================================================
-// STOP
+// STOP PLAYBACK
 // ============================================================
 
 function stopPlayback() {
@@ -2228,7 +2588,9 @@ function stopPlayback() {
     playbackId++;
 
 
-    for (const node of activeNodes) {
+    for (
+        const node of activeNodes
+    ) {
 
         try {
             node.stop();
