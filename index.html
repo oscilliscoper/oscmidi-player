@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSCMID Player</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main>
+        <h1>OSCMID Player</h1>
+
+        <input type="file" id="fileInput" accept=".oscmid">
+
+        <div class="controls">
+            <button id="playButton">▶ Play</button>
+            <button id="stopButton">■ Stop</button>
+        </div>
+
+        <h2>File</h2>
+        <pre id="fileInfo">No file loaded.</pre>
+
+        <h2>Channels</h2>
+        <pre id="channels">No channels loaded.</pre>
+
+        <h2>Status</h2>
+        <pre id="status">Waiting for OSCMID file...</pre>
+    </main>
+
+    <script src="player.js"></script>
+
+</body>
+</html>
